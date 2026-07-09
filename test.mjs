@@ -27,8 +27,15 @@ async function httpPostWithRetry(url, body) {
     try {
       const data = await httpPost(url, body);
       if (data.error) {
-        const isRetryable = data.error.includes('503') || data.error.includes('429') ||
-          /quota|unavailable|high demand|too many|rate limit|Failed to get/i.test(data.error);
+        const isQuota = isNonRetryableQuotaError(data.error);
+        const isRetryable = !isQuota && (
+          data.error.includes('503') ||
+          /unavailable|high demand|too many|Failed to get/i.test(data.error)
+        );
+        if (isQuota) {
+          quotaExhausted = true;
+          return data;
+        }
         if (isRetryable && attempt < MAX_RETRIES) {
           const wait = attempt * 3000;
           console.log(`\n     ⏳ API busy, retry ${attempt}/${MAX_RETRIES} in ${wait}ms`);
@@ -65,10 +72,15 @@ function waitForPort(port, timeoutMs = 25000) {
 let passed = 0;
 let failed = 0;
 let skipped = 0;
+let quotaExhausted = false;
 const failures = [];
 
 function isApiError(msg) {
   return /503|429|quota|unavailable|high demand|too many|rate limit|Failed to get response from Gemini|Failed to summarize conversation/i.test(msg);
+}
+
+function isNonRetryableQuotaError(msg) {
+  return /429|quota|RESOURCE_EXHAUSTED|rate limit/i.test(msg);
 }
 
 async function check(label, fn) {
@@ -137,6 +149,7 @@ async function main() {
     // CHECK 1 — Model A connectivity
     // ──────────────────────────────────────────────────────────────────────────
     await check('CHECK 1: Model A API connectivity', async () => {
+      if (quotaExhausted) throw new Error('SKIPPED — quota already exhausted this session');
       const data = await httpPostWithRetry(`${BASE}/api/chat`, {
         messages: [{ role: 'user', content: 'Say hello in exactly 5 words' }],
         model: 'a',
@@ -190,6 +203,7 @@ async function main() {
     // ──────────────────────────────────────────────────────────────────────────
     let summaryResult = null;
     await check('CHECK 4: Summarization produces valid JSON', async () => {
+      if (quotaExhausted) throw new Error('SKIPPED — quota already exhausted this session');
       const transcript = [
         { role: 'user', content: 'I got two job offers — one at Google as a senior engineer and one at a Series A startup as their first ML hire. I\'m torn.' },
         { role: 'assistant', content: 'The Google offer brings stability, brand, and resources. The startup offers equity upside and more autonomy. What matters most to you right now?' },
@@ -232,37 +246,23 @@ async function main() {
         enriched = { ...summaryResult, source_model: 'Model A', saved_at: new Date().toISOString() };
         console.log(`\n     Using AI summary from Check 4`);
       } else {
-        // Fallback: try AI summarize directly
-        const data = await httpPostWithRetry(`${BASE}/api/summarize`, {
-          messages: [
-            { role: 'user', content: 'I got two offers: Google senior engineer or Series A startup first ML hire.' },
-            { role: 'assistant', content: 'Both are great. What matters most?' },
-            { role: 'user', content: 'Leaning startup — equity, shape ML team, AI diagnostic tool for rare diseases, founders ex-Mayo.' },
-            { role: 'assistant', content: 'Startup sounds like a better fit.' },
-            { role: 'user', content: 'I\'m accepting the startup offer.' },
-            { role: 'assistant', content: 'Great choice!' },
+        // Fallback: upload canned structured data (tests save pipeline without AI)
+        // Never re-call summarize here — that would waste quota on a second attempt
+        enriched = {
+          topic: 'Job offer decision',
+          key_facts: [
+            'User received offers from Google and a Series A startup',
+            'Startup builds an AI-powered diagnostic tool for rare diseases',
+            'Founders are ex-Mayo Clinic doctors',
+            'Startup role is first ML hire',
           ],
-        });
-        if (data.summary) {
-          enriched = { ...data.summary, source_model: 'Model A', saved_at: new Date().toISOString() };
-        } else {
-          // Last resort: upload canned structured data (tests save pipeline without AI)
-          enriched = {
-            topic: 'Job offer decision',
-            key_facts: [
-              'User received offers from Google and a Series A startup',
-              'Startup builds an AI-powered diagnostic tool for rare diseases',
-              'Founders are ex-Mayo Clinic doctors',
-              'Startup role is first ML hire',
-            ],
-            decisions: ['User accepted the Series A startup offer'],
-            preferences: ['Prefers startup equity upside over Google stability'],
-            summary: 'User chose a Series A startup over Google for an ML role at an AI rare-disease diagnostic company.',
-            source_model: 'Model A',
-            saved_at: new Date().toISOString(),
-          };
-          console.log(`\n     ⚠  AI unavailable, using canned summary (save pipeline still tested)`);
-        }
+          decisions: ['User accepted the Series A startup offer'],
+          preferences: ['Prefers startup equity upside over Google stability'],
+          summary: 'User chose a Series A startup over Google for an ML role at an AI rare-disease diagnostic company.',
+          source_model: 'Model A',
+          saved_at: new Date().toISOString(),
+        };
+        console.log(`\n     ⚠  AI unavailable, using canned summary (save pipeline still tested)`);
       }
 
       const upload = await httpPost(`${BASE}/api/filecoin`, { action: 'upload', data: enriched });
@@ -327,7 +327,7 @@ async function main() {
     console.log('');
     console.log('══════════════════════════════════════════════════════');
     console.log(`  ${passed}/${passed + failed + skipped} checks passed`);
-    if (skipped > 0) console.log(`  ${skipped} skipped (API unavailable — transient)`);
+    if (skipped > 0) console.log(`  ${skipped} skipped (${quotaExhausted ? 'quota exhausted' : 'API unavailable — transient'})`);
     if (failed === 0) {
       console.log('  No failures 🎉');
     } else {
