@@ -149,7 +149,7 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
         <h2>
           {label}
           <span className={`badge ${badgeClass}`} style={{ marginLeft: 8 }}>
-            {modelId === 'a' ? 'Gemini 2.5 Flash' : 'Llama 3.3 70B (Groq)'}
+            {modelId === 'a' ? 'Gemini Flash' : 'Llama 3.3 70B (Groq)'}
           </span>
         </h2>
       </div>
