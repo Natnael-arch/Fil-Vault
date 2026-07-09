@@ -22,7 +22,7 @@ The demo proves three things:
 
 The app uses an **LLM-as-extractor** pattern:
 
-1. **Chat** — User talks with **Model A (Gemini 2.5 Flash)** about a topic, making decisions and stating preferences
+1. **Chat** — User talks with **Model A (Gemini 2.0 Flash)** about a topic, making decisions and stating preferences
 2. **Summarize** — A second LLM call (Gemini) extracts key facts, decisions, and preferences into a structured JSON schema
 3. **Store** — That JSON is saved to a mock Filecoin store (or real Lighthouse.storage when deployed); the returned CID is the address of this memory
 4. **Retrieve** — **Model B (Llama 3.3 70B on Groq)** accepts the CID, fetches the JSON, and injects it into the system prompt
@@ -96,9 +96,9 @@ Connect your repo to Netlify, set the build command to `npm run build` and publi
 ## Tech Stack
 
 - **Frontend:** Next.js (Pages Router) + plain CSS
-- **Model A:** Google Gemini 2.5 Flash (direct REST API)
+- **Model A:** Google Gemini 2.0 Flash (direct REST API)
 - **Model B:** Llama 3.3 70B Versatile via Groq API
-- **Summarizer:** Gemini 2.5 Flash (extracts structured JSON from conversations)
+- **Summarizer:** Gemini 2.0 Flash (extracts structured JSON from conversations)
 - **Storage:** In-memory fallback with mock CIDs (`filvault-...`) locally; Lighthouse.storage (Filecoin/IPFS) when deployed with `LIGHTHOUSE_API_KEY`
 - **Deploy:** Vercel / Netlify
 
