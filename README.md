@@ -22,13 +22,13 @@ The demo proves three things:
 
 The app uses an **LLM-as-extractor** pattern:
 
-1. **Chat** — User talks with Model A (Gemini 2.5 Flash Lite) about a topic, making decisions and stating preferences
-2. **Summarize** — A second LLM call extracts key facts, decisions, and preferences into a structured JSON schema
-3. **Store** — That JSON is uploaded to Filecoin via the Lighthouse.storage API; the returned CID is the address of this memory
-4. **Retrieve** — Model B's panel accepts the CID, fetches the JSON from the Filecoin IPFS gateway, and injects it into the system prompt
+1. **Chat** — User talks with **Model A (Gemini 2.5 Flash)** about a topic, making decisions and stating preferences
+2. **Summarize** — A second LLM call (Gemini) extracts key facts, decisions, and preferences into a structured JSON schema
+3. **Store** — That JSON is saved to a mock Filecoin store (or real Lighthouse.storage when deployed); the returned CID is the address of this memory
+4. **Retrieve** — **Model B (Llama 3.3 70B on Groq)** accepts the CID, fetches the JSON, and injects it into the system prompt
 5. **Prove** — The user asks a follow-up question; Model B answers with full context from the Model A conversation
 
-The agent mechanic is: **LLM → Structured JSON → Filecoin → CID → Different LLM**. The extraction LLM acts as the "bridge" that converts freeform chat into structured, portable memory.
+The agent mechanic is: **LLM (Gemini) → Structured JSON → Filecoin → CID → Different LLM (Groq/Llama)**. Using two different LLM providers proves memory is genuinely portable — not just a handoff within the same API.
 
 ## Filecoin Integration
 
@@ -56,7 +56,8 @@ This is a minimal but complete demonstration of the Filecoin storage + retrieval
 ## Prerequisites
 
 1. **Gemini API key** — get one at https://aistudio.google.com/apikey
-2. **Lighthouse API key** — sign up at https://lighthouse.storage/ and get your API key from the dashboard
+2. **Groq API key** — get one at https://console.groq.com/keys
+3. **Lighthouse API key** (optional) — sign up at https://lighthouse.storage/ and get your API key from the dashboard
 
 ## Setup
 
@@ -68,8 +69,8 @@ cd filvault-bridge
 npm install
 
 # Set your API keys
-cp .env.local .env.local
-# Edit .env.local and add your GEMINI_API_KEY and LIGHTHOUSE_API_KEY
+cp .env.local.example .env.local
+# Edit .env.local and add at minimum GEMINI_API_KEY and GROQ_API_KEY
 
 # Run dev server
 npm run dev
@@ -86,22 +87,22 @@ npm i -g vercel
 vercel
 ```
 
-Set the environment variables `GEMINI_API_KEY` and `LIGHTHOUSE_API_KEY` in the Vercel dashboard.
+Set the environment variables `GEMINI_API_KEY`, `GROQ_API_KEY`, and optionally `LIGHTHOUSE_API_KEY` in the Vercel dashboard.
 
 ### Netlify
 
-Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables.
+Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables (`GEMINI_API_KEY`, `GROQ_API_KEY`, optionally `LIGHTHOUSE_API_KEY`).
 
 ## Tech Stack
 
 - **Frontend:** Next.js (Pages Router) + plain CSS
-- **LLM:** Google Gemini 2.5 Flash Lite via direct REST API (fetch)
-- **Storage:** Lighthouse.storage (Filecoin/IPFS)
+- **Model A:** Google Gemini 2.5 Flash (direct REST API)
+- **Model B:** Llama 3.3 70B Versatile via Groq API
+- **Summarizer:** Gemini 2.5 Flash (extracts structured JSON from conversations)
+- **Storage:** In-memory fallback with mock CIDs (`filvault-...`) locally; Lighthouse.storage (Filecoin/IPFS) when deployed with `LIGHTHOUSE_API_KEY`
 - **Deploy:** Vercel / Netlify
 
-> **Note:** Only a Gemini API key was available in the build environment, so both Model A and Model B use Gemini 2.5 Flash Lite with **different system prompts and personas**. Model A is "thoughtful analytical assistant" and Model B is "creative concise assistant." If you have an Anthropic or OpenAI key, modify `pages/api/chat.js` to add a second provider — the architecture supports it; the UI already labels them distinctly.
-
-> **Fallback storage mode:** If `LIGHTHOUSE_API_KEY` is not set, the app uses an in-memory fallback store with mock CIDs (`filvault-...`). The full demo flow works the same way. Set a real Lighthouse key for actual Filecoin/IPFS storage.
+> **Fallback storage mode:** If `LIGHTHOUSE_API_KEY` is not set, the app uses an in-memory fallback store with mock CIDs (`filvault-...`). The full demo flow works the same way. Set a real Lighthouse key for actual Filecoin/IPFS storage. Note: the Lighthouse upload API (`node.lighthouse.storage`) may be unreachable from certain networks — it works when deployed to Vercel/GCP/AWS.
 
 ## AI Build Log
 
@@ -122,7 +123,8 @@ This project was built entirely using **Claude Code (opencode)** as the AI codin
 - *"Scaffold a Next.js app with two chat panels, Model A and Model B, using Gemini API"*
 - *"Add a Save to Filecoin button that summarizes the conversation and uploads to Lighthouse"*
 - *"Add a Load from Filecoin flow that fetches JSON by CID and injects it into Model B's system prompt"*
-- *"Style it like a dark-mode terminal app"*
+- *"Switch Model B from Gemini to Groq/Llama for true cross-provider memory portability"*
+- *"Fix Node.js ETIMEDOUT to Groq API by resolving IPv4 addresses explicitly"*
 
 The entire build took approximately 2 hours from concept to working demo.
 
