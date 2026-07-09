@@ -28,6 +28,40 @@ async function httpsGetJson(hostname, path) {
   });
 }
 
+async function lighthouseUpload(data) {
+  const apiKey = process.env.LIGHTHOUSE_API_KEY;
+  if (!apiKey) return null;
+
+  const body = JSON.stringify(data, null, 2);
+  const boundary = `----Filvault${Date.now()}`;
+  const parts = [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="file"; filename="memory.json"',
+    'Content-Type: application/json',
+    '',
+    body,
+    `--${boundary}--`,
+  ];
+  const multipart = parts.join('\r\n');
+
+  const resp = await fetch('https://node.lighthouse.storage/api/v0/add', {
+    method: 'POST',
+    headers: {
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: multipart,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Lighthouse upload failed: ${resp.status} ${text.slice(0, 200)}`);
+  }
+
+  const result = await resp.json();
+  return { cid: result.Hash, size: result.Size };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -49,17 +83,32 @@ export default async function handler(req, res) {
 }
 
 async function handleUpload(data, res) {
+  // Try real Lighthouse when the key is set (works on Vercel)
+  if (process.env.LIGHTHOUSE_API_KEY) {
+    try {
+      const result = await lighthouseUpload(data);
+      if (result) {
+        return res.status(200).json(result);
+      }
+    } catch (err) {
+      console.error('Lighthouse upload failed, falling back:', err.message);
+    }
+  }
+
+  // Fallback: in-memory mock
   const mockCid = makeMockCid(data);
   memoryStore.set(mockCid, data);
   return res.status(200).json({
     cid: mockCid,
     size: JSON.stringify(data).length,
-    note: 'In-memory fallback (Lighthouse API unreachable from this network — set key on deployment)',
+    note: process.env.LIGHTHOUSE_API_KEY
+      ? 'In-memory fallback (Lighthouse upload failed)'
+      : 'In-memory fallback (set LIGHTHOUSE_API_KEY for real Filecoin storage)',
   });
 }
 
 async function handleRetrieve(cid, res) {
-  // Real Lighthouse CIDs start with "bafy" — try the gateway
+  // Real Lighthouse CID — fetch from gateway
   if (!cid.startsWith('filvault-')) {
     try {
       const data = await httpsGetJson('gateway.lighthouse.storage', `/ipfs/${cid}`);
@@ -71,6 +120,7 @@ async function handleRetrieve(cid, res) {
     }
   }
 
+  // Mock CID — check in-memory store
   const data = memoryStore.get(cid);
   if (!data) return res.status(404).json({ error: 'Data not found in fallback store' });
   const factCount = (data.key_facts?.length || 0) + (data.decisions?.length || 0) + (data.preferences?.length || 0);
