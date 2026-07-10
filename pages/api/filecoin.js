@@ -107,13 +107,17 @@ async function handleUpload(data, res) {
   });
 }
 
+function factCount(data) {
+  const src = data.key_facts ? data : data.summary || data;
+  return (src.key_facts?.length || 0) + (src.decisions?.length || 0) + (src.preferences?.length || 0);
+}
+
 async function handleRetrieve(cid, res) {
   // Real Lighthouse CID — fetch from gateway
   if (!cid.startsWith('filvault-')) {
     try {
       const data = await httpsGetJson('gateway.lighthouse.storage', `/ipfs/${cid}`);
-      const factCount = (data.key_facts?.length || 0) + (data.decisions?.length || 0) + (data.preferences?.length || 0);
-      return res.status(200).json({ data, factCount });
+      return res.status(200).json({ data, factCount: factCount(data) });
     } catch (err) {
       console.error('Gateway retrieve error:', err);
       return res.status(500).json({ error: err.message });
@@ -123,6 +127,5 @@ async function handleRetrieve(cid, res) {
   // Mock CID — check in-memory store
   const data = memoryStore.get(cid);
   if (!data) return res.status(404).json({ error: 'Data not found in fallback store' });
-  const factCount = (data.key_facts?.length || 0) + (data.decisions?.length || 0) + (data.preferences?.length || 0);
-  return res.status(200).json({ data, factCount });
+  return res.status(200).json({ data, factCount: factCount(data) });
 }

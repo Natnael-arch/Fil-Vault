@@ -1,3 +1,5 @@
+import { callHuggingFace } from './lib/huggingface.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -9,9 +11,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Messages array is required' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  if (!process.env.HF_API_KEY) {
+    return res.status(500).json({ error: 'HF_API_KEY not configured' });
   }
 
   const conversationText = messages
@@ -33,30 +34,37 @@ Conversation:
 ${conversationText}`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
-    });
+    const text = await callHuggingFace([{ role: 'user', content: prompt }]);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API error ${response.status}: ${errText.slice(0, 200)}`);
+    let cleaned = text;
+    if (cleaned.includes('```')) {
+      cleaned = cleaned.replace(/```json?\s*/g, '').replace(/```\s*/g, '');
+    }
+    cleaned = cleaned.trim();
+
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
     }
 
-    const result = await response.json();
-    let text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const raw = JSON.parse(cleaned);
 
-    if (text.startsWith('```json')) text = text.slice(7);
-    if (text.startsWith('```')) text = text.slice(3);
-    if (text.endsWith('```')) text = text.slice(0, -3);
-    text = text.trim();
+    const summary = {
+      topic: typeof raw.topic === 'string' ? raw.topic : '',
+      key_facts: Array.isArray(raw.key_facts) ? raw.key_facts : [],
+      decisions: Array.isArray(raw.decisions) ? raw.decisions : [],
+      preferences: Array.isArray(raw.preferences) ? raw.preferences : [],
+      summary: typeof raw.summary === 'string' ? raw.summary : '',
+    };
 
-    const summary = JSON.parse(text);
     return res.status(200).json({ summary });
   } catch (err) {
     console.error('Summarize error:', err);
+    const isWarming = err.message && err.message.includes('warming up');
+    if (isWarming) {
+      return res.status(503).json({ error: err.message });
+    }
     return res.status(500).json({ error: 'Failed to summarize conversation' });
   }
 }

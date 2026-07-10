@@ -1,3 +1,5 @@
+import { callHuggingFace } from './lib/huggingface.js';
+
 const MODEL_SYSTEM_PROMPTS = {
   a: 'You are Model A, part of the FilVault Bridge demo. Keep answers short and direct.',
   b: 'You are Model B, part of the FilVault Bridge demo. Keep answers short and direct.',
@@ -26,7 +28,7 @@ export default async function handler(req, res) {
   if (model === 'b') {
     return handleGroq(systemPrompt, messages, res);
   }
-  return handleGemini(systemPrompt, messages, res);
+  return handleHuggingFace(systemPrompt, messages, res);
 }
 
 async function handleGroq(systemPrompt, messages, res) {
@@ -93,38 +95,21 @@ async function handleGroq(systemPrompt, messages, res) {
   }
 }
 
-async function handleGemini(systemPrompt, messages, res) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-  }
-
-  const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
+async function handleHuggingFace(systemPrompt, messages, res) {
+  const hfMessages = [{ role: 'system', content: systemPrompt }];
   for (const msg of messages) {
-    geminiContents.push({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
-    });
+    hfMessages.push({ role: msg.role, content: msg.content });
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: geminiContents }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API error ${response.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const result = await response.json();
-    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = await callHuggingFace(hfMessages);
     return res.status(200).json({ message: text });
   } catch (err) {
-    console.error('Gemini error:', err);
-    return res.status(500).json({ error: 'Failed to get response from Gemini' });
+    console.error('HuggingFace error:', err);
+    const isWarming = err.message && err.message.includes('warming up');
+    if (isWarming) {
+      return res.status(503).json({ error: err.message });
+    }
+    return res.status(500).json({ error: 'Failed to get response from HuggingFace' });
   }
 }

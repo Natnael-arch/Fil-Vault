@@ -89,17 +89,21 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
 
       setStatusMsg({ type: null, text: 'Uploading to Filecoin via Lighthouse...' });
 
+      const savedSummary = summaryData.summary || {};
+      const uploadPayload = {
+        topic: savedSummary.topic || '',
+        key_facts: Array.isArray(savedSummary.key_facts) ? savedSummary.key_facts : [],
+        decisions: Array.isArray(savedSummary.decisions) ? savedSummary.decisions : [],
+        preferences: Array.isArray(savedSummary.preferences) ? savedSummary.preferences : [],
+        summary: savedSummary.summary || '',
+        source_model: `Model ${modelId.toUpperCase()}`,
+        saved_at: new Date().toISOString(),
+      };
+
       const uploadRes = await fetch('/api/filecoin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'upload',
-          data: {
-            ...summaryData.summary,
-            source_model: `Model ${modelId.toUpperCase()}`,
-            saved_at: new Date().toISOString(),
-          },
-        }),
+        body: JSON.stringify({ action: 'upload', data: uploadPayload }),
       });
       const uploadData = await uploadRes.json();
       if (uploadData.error) throw new Error(uploadData.error);
@@ -130,12 +134,29 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
       const retrieveData = await retrieveRes.json();
       if (retrieveData.error) throw new Error(retrieveData.error);
 
-      setContextLoaded(retrieveData.data);
-      setMessages([]);
-      setStatusMsg({
-        type: 'success',
-        text: `Context loaded: ${retrieveData.factCount} facts retrieved from Filecoin. Model B now has full context.`,
+      const raw = retrieveData.data || {};
+      const src = raw.key_facts ? raw : (raw.summary || raw);
+      setContextLoaded({
+        topic: src.topic || '',
+        key_facts: Array.isArray(src.key_facts) ? src.key_facts : [],
+        decisions: Array.isArray(src.decisions) ? src.decisions : [],
+        preferences: Array.isArray(src.preferences) ? src.preferences : [],
+        summary: src.summary || '',
+        source_model: raw.source_model || '',
+        saved_at: raw.saved_at || '',
       });
+      setMessages([]);
+      if (retrieveData.factCount === 0) {
+        setStatusMsg({
+          type: 'error',
+          text: 'No facts were found in the saved context. The conversation may not have contained enough information to extract facts.',
+        });
+      } else {
+        setStatusMsg({
+          type: 'success',
+          text: `Context loaded: ${retrieveData.factCount} facts retrieved from Filecoin. Model B now has full context.`,
+        });
+      }
     } catch (err) {
       setStatusMsg({ type: 'error', text: `Failed: ${err.message}` });
     } finally {
@@ -149,7 +170,7 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
         <h2>
           {label}
           <span className={`badge ${badgeClass}`} style={{ marginLeft: 8 }}>
-            {modelId === 'a' ? 'Gemini Flash' : 'Llama 3.3 70B (Groq)'}
+            {modelId === 'a' ? 'Llama 3.1 8B (HuggingFace)' : 'Llama 3.3 70B (Groq)'}
           </span>
         </h2>
       </div>

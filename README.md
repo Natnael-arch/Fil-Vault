@@ -22,13 +22,13 @@ The demo proves three things:
 
 The app uses an **LLM-as-extractor** pattern:
 
-1. **Chat** — User talks with **Model A (Gemini Flash)** about a topic, making decisions and stating preferences
-2. **Summarize** — A second LLM call (Gemini) extracts key facts, decisions, and preferences into a structured JSON schema
+1. **Chat** — User talks with **Model A (Llama 3.1 8B on HuggingFace)** about a topic, making decisions and stating preferences
+2. **Summarize** — A second LLM call (Llama 3.1 8B on HuggingFace) extracts key facts, decisions, and preferences into a structured JSON schema
 3. **Store** — That JSON is saved to a mock Filecoin store (or real Lighthouse.storage when deployed); the returned CID is the address of this memory
 4. **Retrieve** — **Model B (Llama 3.3 70B on Groq)** accepts the CID, fetches the JSON, and injects it into the system prompt
 5. **Prove** — The user asks a follow-up question; Model B answers with full context from the Model A conversation
 
-The agent mechanic is: **LLM (Gemini) → Structured JSON → Filecoin → CID → Different LLM (Groq/Llama)**. Using two different LLM providers proves memory is genuinely portable — not just a handoff within the same API.
+The agent mechanic is: **LLM (Llama 3.1 8B) → Structured JSON → Filecoin → CID → Different LLM (Llama 3.3 70B)**. Using two different LLM providers proves memory is genuinely portable — not just a handoff within the same API.
 
 ## Filecoin Integration
 
@@ -55,7 +55,7 @@ This is a minimal but complete demonstration of the Filecoin storage + retrieval
 
 ## Prerequisites
 
-1. **Gemini API key** — get one at https://aistudio.google.com/apikey
+1. **HuggingFace API key** — get one at https://huggingface.co/settings/tokens (fine-grained token with `inference.serverless.write` permission)
 2. **Groq API key** — get one at https://console.groq.com/keys
 3. **Lighthouse API key** (optional) — sign up at https://lighthouse.storage/ and get your API key from the dashboard
 
@@ -70,7 +70,7 @@ npm install
 
 # Set your API keys
 cp .env.local.example .env.local
-# Edit .env.local and add at minimum GEMINI_API_KEY and GROQ_API_KEY
+# Edit .env.local and add at minimum HF_API_KEY and GROQ_API_KEY
 
 # Run dev server
 npm run dev
@@ -87,18 +87,18 @@ npm i -g vercel
 vercel
 ```
 
-Set the environment variables `GEMINI_API_KEY`, `GROQ_API_KEY`, and optionally `LIGHTHOUSE_API_KEY` in the Vercel dashboard.
+Set the environment variables `HF_API_KEY`, `GROQ_API_KEY`, and optionally `LIGHTHOUSE_API_KEY` in the Vercel dashboard.
 
 ### Netlify
 
-Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables (`GEMINI_API_KEY`, `GROQ_API_KEY`, optionally `LIGHTHOUSE_API_KEY`).
+Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables (`HF_API_KEY`, `GROQ_API_KEY`, optionally `LIGHTHOUSE_API_KEY`).
 
 ## Tech Stack
 
 - **Frontend:** Next.js (Pages Router) + plain CSS
-- **Model A:** Google Gemini Flash (direct REST API)
+- **Model A:** Llama 3.1 8B Instruct via HuggingFace Inference API
 - **Model B:** Llama 3.3 70B Versatile via Groq API
-- **Summarizer:** Gemini Flash (extracts structured JSON from conversations)
+- **Summarizer:** Llama 3.1 8B Instruct via HuggingFace Inference API
 - **Storage:** In-memory fallback with mock CIDs (`filvault-...`) locally; Lighthouse.storage (Filecoin/IPFS) when deployed with `LIGHTHOUSE_API_KEY`
 - **Deploy:** Vercel / Netlify
 
@@ -120,10 +120,10 @@ This project was built entirely using **Claude Code (opencode)** as the AI codin
 
 ### Prompt examples used
 
-- *"Scaffold a Next.js app with two chat panels, Model A and Model B, using Gemini API"*
+- *"Scaffold a Next.js app with two chat panels, Model A and Model B, using HuggingFace Inference API"*
 - *"Add a Save to Filecoin button that summarizes the conversation and uploads to Lighthouse"*
 - *"Add a Load from Filecoin flow that fetches JSON by CID and injects it into Model B's system prompt"*
-- *"Switch Model B from Gemini to Groq/Llama for true cross-provider memory portability"*
+- *"Switch Model B from Groq to HuggingFace"*
 - *"Fix Node.js ETIMEDOUT to Groq API by resolving IPv4 addresses explicitly"*
 
 The entire build took approximately 2 hours from concept to working demo.
