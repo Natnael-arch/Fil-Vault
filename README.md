@@ -4,7 +4,7 @@
 
 A single-page web app that demonstrates **portable AI memory across LLM providers** using Filecoin as the storage layer. Chat with Model A, save the conversation memory to Filecoin, then load it into Model B — proving memory is genuinely portable and not tied to one provider.
 
-**Live demo:** _(add Vercel/Netlify URL here after deploy)_
+**Live demo:** https://fil-vault-omega.vercel.app/
 **X post:** _(add your post URL here after publishing — remember to tag @Filecoin and @FilecoinTLDR)_
 
 ---
@@ -24,7 +24,7 @@ The app uses an **LLM-as-extractor** pattern:
 
 1. **Chat** — User talks with **Model A (Llama 3.1 8B on HuggingFace)** about a topic, making decisions and stating preferences
 2. **Summarize** — A second LLM call (Llama 3.1 8B on HuggingFace) extracts key facts, decisions, and preferences into a structured JSON schema
-3. **Store** — That JSON is saved to a mock Filecoin store (or real Filebase when deployed); the returned CID is the address of this memory
+3. **Store** — That JSON is uploaded to **Filebase**, an S3-compatible IPFS/Filecoin provider, which pins it to IPFS and backs it up on Filecoin; the returned CID is the address of this memory
 4. **Retrieve** — **Model B (Llama 3.3 70B on Groq)** accepts the CID, fetches the JSON, and injects it into the system prompt
 5. **Prove** — The user asks a follow-up question; Model B answers with full context from the Model A conversation
 
@@ -57,7 +57,7 @@ This is a minimal but complete demonstration of the Filecoin storage + retrieval
 
 1. **HuggingFace API key** — get one at https://huggingface.co/settings/tokens (fine-grained token with `inference.serverless.write` permission)
 2. **Groq API key** — get one at https://console.groq.com/keys
-3. **Filebase API keys** (optional) — sign up at https://console.filebase.com/ and create a bucket + API keys from the dashboard. You'll need `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, and `FILEBASE_BUCKET`.
+3. **Filebase API keys** — sign up at https://console.filebase.com/, create a bucket, and generate an access key/secret pair. You'll need `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, and `FILEBASE_BUCKET`. The app falls back to an in-memory mock store if these are not set (useful for local testing).
 
 ## Setup
 
@@ -87,11 +87,11 @@ npm i -g vercel
 vercel
 ```
 
-Set the environment variables `HF_API_KEY`, `GROQ_API_KEY`, and optionally `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, `FILEBASE_BUCKET` in the Vercel dashboard.
+Set the environment variables `HF_API_KEY`, `GROQ_API_KEY`, `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, and `FILEBASE_BUCKET` in the Vercel dashboard.
 
 ### Netlify
 
-Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables (`HF_API_KEY`, `GROQ_API_KEY`, plus the `FILEBASE_*` vars if using Filebase storage).
+Connect your repo to Netlify, set the build command to `npm run build` and publish directory to `.next`. Set the same environment variables (`HF_API_KEY`, `GROQ_API_KEY`, `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, `FILEBASE_BUCKET`).
 
 ## Tech Stack
 
@@ -99,10 +99,10 @@ Connect your repo to Netlify, set the build command to `npm run build` and publi
 - **Model A:** Llama 3.1 8B Instruct via HuggingFace Inference API
 - **Model B:** Llama 3.3 70B Versatile via Groq API
 - **Summarizer:** Llama 3.1 8B Instruct via HuggingFace Inference API
-- **Storage:** In-memory fallback with mock CIDs (`filvault-...`) locally; Filebase (Filecoin/IPFS via S3-compatible API) when deployed with `FILEBASE_ACCESS_KEY` / `FILEBASE_SECRET_KEY` / `FILEBASE_BUCKET`
+- **Storage:** Filebase (S3-compatible IPFS/Filecoin) — real IPFS CIDs backed by Filecoin; in-memory mock fallback used only when `FILEBASE_*` env vars are not set
 - **Deploy:** Vercel / Netlify
 
-> **Fallback storage mode:** If Filebase credentials are not set, the app uses an in-memory fallback store with mock CIDs (`filvault-...`). The full demo flow works the same way. Set `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, and `FILEBASE_BUCKET` for actual Filecoin/IPFS storage via Filebase's S3-compatible API.
+> **Mock fallback:** If the `FILEBASE_*` env vars are absent (e.g. local testing), the app uses an in-memory store with fake `filvault-...` CIDs so the demo flow still works. Set `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, and `FILEBASE_BUCKET` for real Filecoin/IPFS storage.
 
 ## AI Build Log
 
@@ -140,7 +140,7 @@ The initial build took approximately 2 hours from concept to working demo.
 - Replaced Lighthouse (`node.lighthouse.storage`) with Filebase S3-compatible IPFS/Filecoin storage
 - Uses `@filebase/sdk` (`ObjectManager`) for uploads — returns real IPFS CIDs
 - Retrieves by CID via S3 download (CID-as-key) with IPFS gateway fallback (`https://ipfs.filebase.io/ipfs/{cid}`)
-- In-memory mock CID fallback kept for when credentials aren't set
+- In-memory mock CID fallback kept as local dev convenience when credentials aren't set
 - DNS-resolving HTTPS GET helper reused from Lighthouse gateway code for the gateway fallback
 
 **Model A & Summarizer: Gemini → HuggingFace**
@@ -161,7 +161,7 @@ The initial build took approximately 2 hours from concept to working demo.
 - Integrated HuggingFace Inference API (Model A) and Groq API (Model B)
 - Implemented LLM-as-extractor summarizer
 - Added save-to-IPFS and load-from-IPFS flow via Lighthouse
-- Deployed demo with mock CID fallback for local dev
+- Deployed demo with internal mock CID fallback for local dev without credentials
 
 ---
 
