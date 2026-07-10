@@ -87,7 +87,7 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
       const summaryData = await summaryRes.json();
       if (summaryData.error) throw new Error(summaryData.error);
 
-      setStatusMsg({ type: null, text: 'Uploading to Filecoin via Lighthouse...' });
+      setStatusMsg({ type: null, text: 'Uploading to Filecoin...' });
 
       const savedSummary = summaryData.summary || {};
       const uploadPayload = {
@@ -124,7 +124,7 @@ function ChatPanel({ modelId, label, badgeClass, otherCid, onCidChange }) {
       return;
     }
     setFilecoinLoading(true);
-    setStatusMsg({ type: null, text: 'Fetching from Filecoin via Lighthouse...' });
+    setStatusMsg({ type: null, text: 'Fetching from Filecoin...' });
     try {
       const retrieveRes = await fetch('/api/filecoin', {
         method: 'POST',
@@ -263,7 +263,7 @@ export default function Home() {
       <div className="demo-steps">
         <strong>Demo Flow:</strong><br />
         1. Chat with <strong>Model A</strong> about a topic → make decisions, state preferences<br />
-        2. Click <code>Save to Filecoin</code> → conversation is summarized and uploaded as JSON via Lighthouse<br />
+        2. Click <code>Save to Filecoin</code> → conversation is summarized and uploaded as JSON via Filebase<br />
         3. Switch to <strong>Model B</strong> (fresh chat, zero prior messages)<br />
         4. Click <code>Load from Filecoin</code> → the saved context is injected into Model B's system prompt<br />
         5. Ask a follow-up → Model B answers with full context from Model A's conversation

@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@filebase/sdk": "^1.0.6",
     "@google/generative-ai": "^0.21.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
